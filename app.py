@@ -1,94 +1,65 @@
 import os
 import zipfile
-from flask import Flask, request, send_file, jsonify, render_template
-from werkzeug.utils import secure_filename
+import streamlit as st
 from converterFactory import ConverterFactory
 from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip
+from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS
 
-app = Flask(__name__)
+# Set the maximum file size to 200MB
+MAX_FILE_SIZE = 200 * 1024 * 1024
 
-# Set maximum file size (500 MB)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+# Streamlit file upload handler
+def upload_file():
+    uploaded_file = st.file_uploader("Choose a file", type=SUPPORTED_INPUT_FORMATS, label_visibility="collapsed")
+    return uploaded_file
 
-# Allowed extensions for input and output files
-ALLOWED_EXTENSIONS = {'txt', 'csv', 'jpg', 'jpeg', 'png', 'pdf', 'docx', 'xml', 'bmp', 'gif'}
+# Function for single file conversion
+def convert_single_file(input_file, output_format):
+    # Validate file size
+    if input_file.size > MAX_FILE_SIZE:
+        st.error("File size exceeds 200MB limit.")
+        return
 
+    # Validate file format
+    is_valid, error_message = validate_file_format(input_file, output_format)
+    if not is_valid:
+        st.error(error_message)
+        return
 
-# Helper function to check allowed file extensions
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    # Save the uploaded file temporarily
+    filename = input_file.name
+    input_path = os.path.join('input', filename)
+    with open(input_path, 'wb') as f:
+        f.write(input_file.getbuffer())
 
+    output_filename = f"output/{os.path.splitext(filename)[0]}_converted.{output_format}"
+    create_output_directory(output_filename)
 
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-
-@app.route('/convert', methods=['POST'])
-def convert_file():
-    # Check if file is provided
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-
-    # Check if the file is empty
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    # Check if file is allowed
-    if file and allowed_file(file.filename):
-        output_format = request.form.get('output_format')
-
-        # Validate file format
-        is_valid, error_message = validate_file_format(file, output_format)
-        if not is_valid:
-            return jsonify({'error': error_message}), 400
-
-        # Save the uploaded file
-        filename = secure_filename(file.filename)
-        input_path = os.path.join('input', filename)
-        file.save(input_path)
-
-        # Prepare the output file path
-        output_filename = f"output/{os.path.splitext(filename)[0]}_converted.{output_format}"
-        create_output_directory(output_filename)
-
-        # Get the appropriate converter
-        try:
-            input_format = filename.rsplit('.', 1)[1].lower()
-            converter = ConverterFactory.get_converter(input_format, output_format)
-            converter.convert(input_path, output_filename)
-
-            return send_file(output_filename, as_attachment=True)
-
-        except Exception as e:
-            return jsonify({'error': f"Error during conversion: {e}"}), 500
-    else:
-        return jsonify({'error': 'File not allowed or invalid'}), 400
-
-
-@app.route('/convert_zip', methods=['POST'])
-def convert_zip():
-    # Check if the file is provided
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-
-    file = request.files['file']
-
-    # Check if the file is a zip file
-    if not file.filename.endswith('.zip'):
-        return jsonify({'error': 'Please upload a zip file'}), 400
-
-    output_format = request.form.get('output_format')
-    if not output_format:
-        return jsonify({'error': 'No output format specified'}), 400
-
-    zip_filename = secure_filename(file.filename)
-    zip_path = os.path.join('input', zip_filename)
-    file.save(zip_path)
-
-    # Extract the files from the zip archive
+    # Get the appropriate converter
     try:
+        input_format = filename.rsplit('.', 1)[1].lower()
+        converter = ConverterFactory.get_converter(input_format, output_format)
+        converter.convert(input_path, output_filename)
+
+        st.success(f"Conversion successful! Download the file below.")
+        st.download_button("Download Converted File", output_filename, file_name=output_filename)
+    except Exception as e:
+        st.error(f"Error during conversion: {e}")
+
+# Function for batch conversion from ZIP file
+def convert_zip(input_file, output_format):
+    # Validate file size
+    if input_file.size > MAX_FILE_SIZE:
+        st.error("File size exceeds 200MB limit.")
+        return
+
+    zip_filename = input_file.name
+    zip_path = os.path.join('input', zip_filename)
+    with open(zip_path, 'wb') as f:
+        f.write(input_file.getbuffer())
+
+    try:
+        # Extract files from the uploaded ZIP file
         extracted_files = extract_zip(zip_path)
 
         # Process and convert the extracted files
@@ -104,11 +75,31 @@ def convert_zip():
 
         # Create a zip file of converted files
         converted_zip = create_zip(converted_files)
-        return send_file(converted_zip, as_attachment=True)
+        st.success("Batch conversion completed successfully! Download the ZIP below.")
+        st.download_button("Download Converted ZIP", converted_zip, file_name=converted_zip)
 
     except Exception as e:
-        return jsonify({'error': f"Error during batch conversion: {e}"}), 500
+        st.error(f"Error during batch conversion: {e}")
 
+# Streamlit user interface
+def main():
+    st.title("File Format Converter")
+    st.write("Upload your files for conversion")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    # Choose between single file conversion and batch file conversion
+    task_type = st.radio("Choose a conversion task", ("Single File Conversion", "Batch Conversion (ZIP)"))
+
+    if task_type == "Single File Conversion":
+        uploaded_file = upload_file()
+        if uploaded_file is not None:
+            output_format = st.selectbox("Choose the output format", SUPPORTED_OUTPUT_FORMATS)
+            convert_single_file(uploaded_file, output_format)
+
+    elif task_type == "Batch Conversion (ZIP)":
+        uploaded_zip = st.file_uploader("Choose a ZIP file", type="zip", label_visibility="collapsed")
+        if uploaded_zip is not None:
+            output_format = st.selectbox("Choose the output format", SUPPORTED_OUTPUT_FORMATS)
+            convert_zip(uploaded_zip, output_format)
+
+if __name__ == "__main__":
+    main()

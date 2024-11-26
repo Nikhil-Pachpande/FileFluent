@@ -1,4 +1,3 @@
-# utils.py
 import os
 import zipfile
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS
@@ -15,7 +14,7 @@ def create_output_directory(output_file):
 
 
 def validate_file_format(input_file, output_format):
-    input_format = input_file.filename.rsplit('.', 1)[1].lower()
+    input_format = input_file.name.rsplit('.', 1)[1].lower()
 
     if input_format not in SUPPORTED_INPUT_FORMATS:
         return False, f"Invalid input format: {input_format}. Allowed formats: {', '.join(SUPPORTED_INPUT_FORMATS)}."
