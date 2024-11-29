@@ -6,6 +6,19 @@ from utils import check_file_exists, create_output_directory, validate_file_form
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
+# to classify the file based on its extension
+def classify_file(input_file):
+    extension = input_file.name.split('.')[-1].lower()
+    if extension in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
+        return 'image'
+    elif extension in ['txt', 'csv', 'xml', 'json']:
+        return 'text'
+    elif extension in ['pdf', 'docx']:
+        return 'document'
+    else:
+        return 'other'
+
+
 # handle file uploads
 def upload_file():
     uploaded_file = st.file_uploader("Choose a file", type=SUPPORTED_INPUT_FORMATS, label_visibility="collapsed")
@@ -34,7 +47,6 @@ def convert_single_file(input_file, output_format):
     output_filename = f"output/{os.path.splitext(filename)[0]}_converted.{output_format}"
     create_output_directory(output_filename)
 
-    # to get the appropriate converter from converterFactory
     try:
         input_format = filename.rsplit('.', 1)[1].lower()
 
@@ -117,13 +129,39 @@ def main():
     if task_type == "Single File Conversion":
         uploaded_file = upload_file()
         if uploaded_file is not None:
-            output_format = st.selectbox("Choose the output format", SUPPORTED_OUTPUT_FORMATS)
+            # to classify the uploaded file
+            file_type = classify_file(uploaded_file)
+
+            # based on the uploaded file type, show only the appropriate output formats available for conversion
+            if file_type == 'image':
+                output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
+            elif file_type == 'text':
+                output_formats = ['txt', 'json', 'csv', 'xml']
+            elif file_type == 'document':
+                output_formats = ['pdf', 'txt', 'docx']
+            else:
+                output_formats = SUPPORTED_OUTPUT_FORMATS  # allow all formats for other types
+
+            output_format = st.selectbox("Choose the output format", output_formats)
             convert_single_file(uploaded_file, output_format)
 
     elif task_type == "Batch Conversion (ZIP)":
         uploaded_zip = st.file_uploader("Choose a ZIP file", type="zip", label_visibility="collapsed")
         if uploaded_zip is not None:
-            output_format = st.selectbox("Choose the output format", SUPPORTED_OUTPUT_FORMATS)
+            # to classify the uploaded ZIP file
+            file_type = classify_file(uploaded_zip)
+
+            # based on the uploaded file type, show only the appropriate output formats available for conversion
+            if file_type == 'image':
+                output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
+            elif file_type == 'text':
+                output_formats = ['txt', 'json', 'csv', 'xml']
+            elif file_type == 'document':
+                output_formats = ['pdf', 'txt', 'docx']
+            else:
+                output_formats = SUPPORTED_OUTPUT_FORMATS  # Allow all formats for other types
+
+            output_format = st.selectbox("Choose the output format", output_formats)
             convert_zip(uploaded_zip, output_format)
 
 
