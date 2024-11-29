@@ -1,180 +1,83 @@
-from abc import ABC, abstractmethod
-import csv
-import json
-import pandas as pd
-import xml.etree.ElementTree as ET
 from PIL import Image
 import fitz
-from docx2pdf import convert as docx_to_pdf
-from PyPDF2 import PdfReader
+import pandas as pd
 from docx import Document
-from fpdf import FPDF
+from config import SUPPORTED_INPUT_FORMATS
 
 
-class FileConverter(ABC):
-    @abstractmethod
-    def convert(self, input_file, output_file):
-        pass
+class Converter:
+    def __init__(self, input_path, output_path, output_format):
+        self.input_path = input_path
+        self.output_path = output_path
+        self.output_format = output_format
 
 
-class TextToCSVConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        with open(input_file, 'r') as txt_file:
-            lines = txt_file.readlines()
-
-        with open(output_file, 'w', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-            for line in lines:
-                writer.writerow(line.strip().split())
-
-
-class CSVToJSONConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        df = pd.read_csv(input_file)
-        df.to_json(output_file, orient='records', lines=True)
-
-
-class JSONToCSVConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        df = pd.read_json(input_file)
-        df.to_csv(output_file, index=False)
+    # conversion for any input image format to any other supported format
+    def convert_image(self):
+        with Image.open(self.input_path) as img:
+            if self.output_format.lower() == 'png':
+                img = img.convert("RGBA")
+                img.save(self.output_path, format="PNG")
+            elif self.output_format.lower() in ['jpg', 'jpeg']:
+                img = img.convert("RGB")
+                img.save(self.output_path, format="JPEG")
+            elif self.output_format.lower() == 'bmp':
+                img.save(self.output_path, format="BMP")
+            elif self.output_format.lower() == 'gif':
+                img.save(self.output_path, format="GIF")
+            else:
+                raise ValueError(f"Unsupported image output format: {self.output_format}")
 
 
-class JSONToTextConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        with open(input_file, 'r') as f:
-            data = json.load(f)
-
-        with open(output_file, 'w') as f:
-            json.dump(data, f, indent=4)
-
-
-class CSVToTextConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        df = pd.read_csv(input_file)
-        df.to_string(output_file, index=False)
-
-
-class ImageToImageConverter(FileConverter):
-    def __init__(self, format):
-        self.format = format
-
-    def convert(self, input_file, output_file):
-        with Image.open(input_file) as img:
-            img.convert('RGB').save(output_file, format=self.format.upper())
+    # conversion for pdf to text/png
+    def convert_pdf(self):
+        doc = fitz.open(self.input_path)
+        if self.output_format.lower() == 'txt':
+            with open(self.output_path, 'w') as txt_file:
+                for page in doc:
+                    txt_file.write(page.get_text())
+        elif self.output_format.lower() == 'png':
+            page = doc.load_page(0)
+            pix = page.get_pixmap()
+            pix.save(self.output_path)
+        else:
+            raise ValueError(f"Unsupported PDF output format: {self.output_format}")
 
 
-class PDFToTextConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        doc = fitz.open(input_file)
-        with open(output_file, 'w') as f:
-            for page in doc:
-                f.write(page.get_text())
+    # conversion for docx to text
+    def convert_docx(self):
+        """Convert DOCX to text (or other formats)."""
+        if self.output_format.lower() == 'txt':
+            doc = Document(self.input_path)
+            with open(self.output_path, 'w') as txt_file:
+                for para in doc.paragraphs:
+                    txt_file.write(para.text + '\n')
+        else:
+            raise ValueError(f"Unsupported DOCX output format: {self.output_format}")
 
 
-class PDFToImageConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        doc = fitz.open(input_file)
-        page = doc.load_page(0)
-        pix = page.get_pixmap()
-        pix.save(output_file)
+    # conversion for csv to json
+    def convert_csv(self):
+        if self.output_format.lower() == 'json':
+            df = pd.read_csv(self.input_path)
+            df.to_json(self.output_path, orient='records', lines=True)
+        elif self.output_format.lower() == 'txt':
+            df = pd.read_csv(self.input_path)
+            df.to_csv(self.output_path, index=False, sep='\t')
+        else:
+            raise ValueError(f"Unsupported CSV output format: {self.output_format}")
 
+    # general method to call respective converter to the input file format
+    def convert(self):
+        input_format = self.input_path.split('.')[-1].lower()
 
-class WordToPDFConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        try:
-            docx_to_pdf(input_file, output_file)
-        except Exception as e:
-            raise ValueError(f"Error converting Word to PDF: {e}")
-
-
-class PDFToWordConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        try:
-            reader = PdfReader(input_file)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
-
-            doc = Document()
-            doc.add_paragraph(text)
-            doc.save(output_file)
-        except Exception as e:
-            raise ValueError(f"Error converting PDF to Word: {e}")
-
-
-class XMLToJSONConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        tree = ET.parse(input_file)
-        root = tree.getroot()
-
-        def parse_element(element):
-            data = {}
-            for child in element:
-                data[child.tag] = parse_element(child) if len(child) > 0 else child.text
-            return data
-
-        data = {root.tag: parse_element(root)}
-
-        with open(output_file, 'w') as json_file:
-            json.dump(data, json_file, indent=4)
-
-
-class JSONToXMLConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        with open(input_file, 'r') as f:
-            data = json.load(f)
-
-        def dict_to_xml(tag, d):
-            result = []
-            for key, value in d.items():
-                if isinstance(value, dict):
-                    result.append(f"<{key}>{dict_to_xml(key, value)}</{key}>")
-                else:
-                    result.append(f"<{key}>{value}</{key}>")
-            return ''.join(result)
-
-        xml_data = dict_to_xml('root', data)
-        with open(output_file, 'w') as f:
-            f.write(xml_data)
-
-
-class XMLToCSVConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        tree = ET.parse(input_file)
-        root = tree.getroot()
-        rows = []
-
-        def parse_element(element):
-            data = {}
-            for child in element:
-                data[child.tag] = parse_element(child) if len(child) > 0 else child.text
-            return data
-
-        for item in root:
-            rows.append(parse_element(item))
-
-        df = pd.DataFrame(rows)
-        df.to_csv(output_file, index=False)
-
-
-class CSVToPDFConverter(FileConverter):
-    def convert(self, input_file, output_file):
-        df = pd.read_csv(input_file)
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.set_font("Arial", size=12)
-
-        pdf.cell(40, 10, 'Column 1', border=1)
-        pdf.cell(40, 10, 'Column 2', border=1)
-        pdf.cell(40, 10, 'Column 3', border=1)
-        pdf.ln()
-
-        for index, row in df.iterrows():
-            pdf.cell(40, 10, str(row[0]), border=1)
-            pdf.cell(40, 10, str(row[1]), border=1)
-            pdf.cell(40, 10, str(row[2]), border=1)
-            pdf.ln()
-
-        pdf.output(output_file)
+        if input_format in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
+            self.convert_image()
+        elif input_format == 'pdf':
+            self.convert_pdf()
+        elif input_format == 'docx':
+            self.convert_docx()
+        elif input_format == 'csv':
+            self.convert_csv()
+        else:
+            raise ValueError(f"Unsupported input format: {input_format}")
