@@ -84,7 +84,7 @@ def convert_zip(input_file, output_format):
 
 # Streamlit user interface
 def main():
-    st.title("File Format Converter")
+    st.title("FileFluent")
     st.write("Upload your files for conversion")
 
     # Choose between single file conversion and batch file conversion
