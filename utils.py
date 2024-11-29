@@ -26,7 +26,7 @@ def validate_file_format(input_file, output_format):
 
 
 def extract_zip(zip_path):
-    """Extract files from a zip archive and return the list of extracted file paths."""
+    # Extract files from a zip archive and return the list of extracted file paths.
     extracted_files = []
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall('input')
@@ -35,7 +35,7 @@ def extract_zip(zip_path):
 
 
 def create_zip(files):
-    """Create a zip archive containing the converted files."""
+    # Create a zip archive containing the converted files.
     zip_filename = "output/converted_files.zip"
     with zipfile.ZipFile(zip_filename, 'w') as zipf:
         for file in files:
