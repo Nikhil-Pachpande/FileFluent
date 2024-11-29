@@ -2,7 +2,7 @@ import os
 import zipfile
 import streamlit as st
 from converterFactory import ConverterFactory
-from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip, convert_image
+from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip, convert_image, convert_pdf, convert_docx, convert_csv
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
@@ -36,11 +36,19 @@ def convert_single_file(input_file, output_format):
 
     # to get the appropriate converter from converterFactory
     try:
-        # If the file is an image (JPEG or PNG), convert it
-        if filename.lower().endswith(('jpg', 'jpeg', 'png')):
+        input_format = filename.rsplit('.', 1)[1].lower()
+
+        # conversion based on input file format
+        if input_format in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
             convert_image(input_path, output_filename, output_format)
+        elif input_format == 'pdf':
+            convert_pdf(input_path, output_filename, output_format)
+        elif input_format == 'docx':
+            convert_docx(input_path, output_filename, output_format)
+        elif input_format == 'csv':
+            convert_csv(input_path, output_filename, output_format)
         else:
-            st.error("Invalid file format. Only JPEG and PNG are supported for conversion.")
+            st.error(f"Unsupported conversion for {input_format} to {output_format}.")
             return
 
         st.success(f"Conversion successful! Download the file below.")
@@ -72,14 +80,22 @@ def convert_zip(input_file, output_format):
             input_filename = os.path.basename(extracted_file)
             input_format = input_filename.rsplit('.', 1)[1].lower()
 
-            # If the file is an image, convert it
-            if input_filename.lower().endswith(('jpg', 'jpeg', 'png')):
-                output_filename = f"output/{os.path.splitext(input_filename)[0]}_converted.{output_format}"
+            output_filename = f"output/{os.path.splitext(input_filename)[0]}_converted.{output_format}"
+
+            # Convert based on input file format
+            if input_format in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
                 convert_image(extracted_file, output_filename, output_format)
-                converted_files.append(output_filename)
+            elif input_format == 'pdf':
+                convert_pdf(extracted_file, output_filename, output_format)
+            elif input_format == 'docx':
+                convert_docx(extracted_file, output_filename, output_format)
+            elif input_format == 'csv':
+                convert_csv(extracted_file, output_filename, output_format)
             else:
-                st.error(f"Skipping non-image file: {input_filename}")
+                st.error(f"Skipping unsupported file: {input_filename}")
                 continue
+
+            converted_files.append(output_filename)
 
         # create a zip file of converted files
         converted_zip = create_zip(converted_files)
