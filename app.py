@@ -2,7 +2,7 @@ import os
 import zipfile
 import streamlit as st
 from converterFactory import ConverterFactory
-from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip
+from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip, convert_image
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
@@ -36,12 +36,16 @@ def convert_single_file(input_file, output_format):
 
     # to get the appropriate converter from converterFactory
     try:
-        input_format = filename.rsplit('.', 1)[1].lower()
-        converter = ConverterFactory.get_converter(input_format, output_format)
-        converter.convert(input_path, output_filename)
+        # If the file is an image (JPEG or PNG), convert it
+        if filename.lower().endswith(('jpg', 'jpeg', 'png')):
+            convert_image(input_path, output_filename, output_format)
+        else:
+            st.error("Invalid file format. Only JPEG and PNG are supported for conversion.")
+            return
 
         st.success(f"Conversion successful! Download the file below.")
         st.download_button("Download Converted File", output_filename, file_name=output_filename)
+
     except Exception as e:
         st.error(f"Error during conversion: {e}")
 
@@ -67,11 +71,15 @@ def convert_zip(input_file, output_format):
         for extracted_file in extracted_files:
             input_filename = os.path.basename(extracted_file)
             input_format = input_filename.rsplit('.', 1)[1].lower()
-            output_filename = f"output/{os.path.splitext(input_filename)[0]}_converted.{output_format}"
-            create_output_directory(output_filename)
-            converter = ConverterFactory.get_converter(input_format, output_format)
-            converter.convert(extracted_file, output_filename)
-            converted_files.append(output_filename)
+
+            # If the file is an image, convert it
+            if input_filename.lower().endswith(('jpg', 'jpeg', 'png')):
+                output_filename = f"output/{os.path.splitext(input_filename)[0]}_converted.{output_format}"
+                convert_image(extracted_file, output_filename, output_format)
+                converted_files.append(output_filename)
+            else:
+                st.error(f"Skipping non-image file: {input_filename}")
+                continue
 
         # create a zip file of converted files
         converted_zip = create_zip(converted_files)

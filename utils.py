@@ -1,4 +1,5 @@
 import os
+from PIL import Image
 import zipfile
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS
 
@@ -23,6 +24,19 @@ def validate_file_format(input_file, output_format):
         return False, f"Invalid output format: {output_format}. Allowed formats: {', '.join(SUPPORTED_OUTPUT_FORMATS)}."
 
     return True, ""
+
+
+def convert_image(input_path, output_path, output_format):
+    # to convert image to the target format (JPEG <-> PNG).
+    with Image.open(input_path) as img:
+        if output_format.lower() == 'png':
+            img = img.convert("RGBA")  # Convert image to RGBA mode if converting to PNG
+            img.save(output_path, format="PNG")
+        elif output_format.lower() == 'jpg' or output_format.lower() == 'jpeg':
+            img = img.convert("RGB")  # Convert image to RGB mode if converting to JPEG
+            img.save(output_path, format="JPEG")
+        else:
+            raise ValueError("Unsupported output format for image conversion")
 
 
 def extract_zip(zip_path):
