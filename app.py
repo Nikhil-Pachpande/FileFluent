@@ -52,7 +52,7 @@ def convert_single_file(input_file, output_format):
 
         # get the correct converter from the converterFactory and perform the conversion
         converter = ConverterFactory.get_converter(input_format, output_format, input_path, output_filename)
-        converter
+        converter.convert()
 
         st.success(f"Conversion successful! Download the file below.")
         st.download_button("Download Converted File", output_filename, file_name=output_filename)
@@ -116,14 +116,14 @@ def main():
             if file_type == 'image':
                 output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
             elif file_type == 'text':
-                output_formats = ['txt', 'json', 'csv', 'xml']
+                output_formats = ['json', 'csv', 'xml', 'docx']
             elif file_type == 'document':
                 output_formats = ['pdf', 'txt', 'docx']
             else:
                 output_formats = SUPPORTED_OUTPUT_FORMATS
 
-            # to show output format dropdown for user to select
-            output_format = st.selectbox("Choose the output format", output_formats)
+            # to show output format dropdown for user to select from
+            output_format = st.selectbox("Choose the output format", [fmt for fmt in output_formats if fmt != uploaded_file.name.rsplit('.', 1)[1].lower()])
 
             # button to trigger conversion
             if st.button("Convert"):
@@ -139,18 +139,19 @@ def main():
             if file_type == 'image':
                 output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
             elif file_type == 'text':
-                output_formats = ['txt', 'json', 'csv', 'xml']
+                output_formats = ['json', 'csv', 'xml', 'docx']
             elif file_type == 'document':
                 output_formats = ['pdf', 'txt', 'docx']
             else:
                 output_formats = SUPPORTED_OUTPUT_FORMATS  # Allow all formats for other types
 
-            # to show output format dropdown for user to select
-            output_format = st.selectbox("Choose the output format", output_formats)
+            # to show output format dropdown for user to select from
+            output_format = st.selectbox("Choose the output format", [fmt for fmt in output_formats if fmt != uploaded_zip.name.rsplit('.', 1)[1].lower()])
 
             # button to trigger conversion
             if st.button("Convert"):
                 convert_zip(uploaded_zip, output_format)
+
 
 if __name__ == "__main__":
     main()
