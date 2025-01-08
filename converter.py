@@ -31,19 +31,40 @@ class Converter:
             else:
                 raise ValueError(f"Unsupported image output format: {self.output_format}")
 
-    # Convert PDFs to text or images
+    # Convert PDFs to various formats
     def convert_pdf(self):
-        doc = fitz.open(self.input_path)
         if self.output_format.lower() == 'txt':
-            with open(self.output_path, 'w') as txt_file:
-                for page in doc:
-                    txt_file.write(page.get_text())
+            self.convert_pdf_to_txt()
         elif self.output_format.lower() == 'png':
-            page = doc.load_page(0)
-            pix = page.get_pixmap()
-            pix.save(self.output_path)
+            self.convert_pdf_to_png()
+        elif self.output_format.lower() == 'docx':
+            self.convert_pdf_to_docx()
         else:
             raise ValueError(f"Unsupported PDF output format: {self.output_format}")
+
+    def convert_pdf_to_txt(self):
+        doc = fitz.open(self.input_path)
+        with open(self.output_path, 'w') as txt_file:
+            for page in doc:
+                txt_file.write(page.get_text())
+
+    def convert_pdf_to_png(self):
+        doc = fitz.open(self.input_path)
+        page = doc.load_page(0)
+        pix = page.get_pixmap()
+        pix.save(self.output_path)
+
+    def convert_pdf_to_docx(self):
+        doc = fitz.open(self.input_path)
+        word_doc = Document()
+
+        for page_num, page in enumerate(doc):
+            text = page.get_text()
+            word_doc.add_paragraph(f"Page {page_num + 1}")
+            word_doc.add_paragraph(text)
+            word_doc.add_paragraph("\n" + "-" * 50 + "\n")
+
+        word_doc.save(self.output_path)
 
     # Convert DOCX to text or PDF
     def convert_docx(self):
