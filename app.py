@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 from converterFactory import ConverterFactory
-from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip
+from utils import validate_file_format, create_output_directory, extract_zip, create_zip
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
