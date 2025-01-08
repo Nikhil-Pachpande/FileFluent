@@ -6,6 +6,15 @@ from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_S
 
 
 def classify_file(input_file):
+    """
+    To classify the uploaded file based on its extension.
+
+    Parameters:
+        input_file (UploadedFile): The file uploaded via Streamlit.
+
+    Returns:
+        str: A string indicating the file type (e.g., 'image', 'text', 'document', or 'other').
+    """
     extension = input_file.name.split('.')[-1].lower()
     if extension in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
         return 'image'
@@ -18,10 +27,26 @@ def classify_file(input_file):
 
 
 def upload_file():
+    """
+    To handle single file uploads using Streamlit's file_uploader.
+
+    Returns:
+        UploadedFile: The uploaded file object.
+    """
     return st.file_uploader("Choose a file", type=SUPPORTED_INPUT_FORMATS, label_visibility="collapsed")
 
 
 def convert_single_file(input_file, output_format):
+    """
+    To convert a single uploaded file to the specified output format.
+
+    Parameters:
+        input_file (UploadedFile): The file uploaded via Streamlit.
+        output_format (str): The desired output format.
+
+    Returns:
+        None: Displays success or error messages in the Streamlit app and provides a download button for the converted file.
+    """
     if input_file.size > MAX_FILE_SIZE:
         st.error("File size exceeds 1GB limit.")
         return
@@ -50,6 +75,16 @@ def convert_single_file(input_file, output_format):
 
 
 def convert_zip(input_file, output_format):
+    """
+    To handle batch conversion of files contained in a ZIP archive.
+
+    Parameters:
+        input_file (UploadedFile): The ZIP file uploaded via Streamlit.
+        output_format (str): The desired output format for all files in the ZIP.
+
+    Returns:
+        None: Displays success or error messages in the Streamlit app and provides a download button for the ZIP of converted files.
+    """
     if input_file.size > MAX_FILE_SIZE:
         st.error("File size exceeds 1GB limit.")
         return
@@ -80,6 +115,12 @@ def convert_zip(input_file, output_format):
 
 
 def main():
+    """
+    Main function that sets up the Streamlit user interface.
+
+    Returns:
+        None: Starts the Streamlit app.
+    """
     st.title("FileFluent")
     st.write("Upload your files for conversion")
 
