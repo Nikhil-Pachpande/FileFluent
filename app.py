@@ -1,51 +1,156 @@
-import streamlit as st
-
 import os
+import zipfile
+import streamlit as st
 from converterFactory import ConverterFactory
-from utils import check_file_exists, create_output_directory
-import tempfile
+from utils import check_file_exists, create_output_directory, validate_file_format, extract_zip, create_zip
+from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
+# to classify the file based on its extension
+def classify_file(input_file):
+    extension = input_file.name.split('.')[-1].lower()
+    if extension in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
+        return 'image'
+    elif extension in ['txt', 'csv', 'xml', 'json']:
+        return 'text'
+    elif extension in ['pdf', 'docx']:
+        return 'document'
+    else:
+        return 'other'
+
+
+# handle file uploads
+def upload_file():
+    uploaded_file = st.file_uploader("Choose a file", type=SUPPORTED_INPUT_FORMATS, label_visibility="collapsed")
+    return uploaded_file
+
+
+# single file conversion
+def convert_single_file(input_file, output_format):
+    # Validate file size
+    if input_file.size > MAX_FILE_SIZE:
+        st.error("File size exceeds 1GB limit.")
+        return
+
+    # validate file format
+    is_valid, error_message = validate_file_format(input_file, output_format)
+    if not is_valid:
+        st.error(error_message)
+        return
+
+    # Save the uploaded file temporarily
+    filename = input_file.name
+    input_path = os.path.join('input', filename)
+    with open(input_path, 'wb') as f:
+        f.write(input_file.getbuffer())
+
+    output_filename = f"output/{os.path.splitext(filename)[0]}_converted.{output_format}"
+    create_output_directory(output_filename)
+
+    try:
+        input_format = filename.rsplit('.', 1)[1].lower()
+
+        # get the correct converter from the converterFactory and perform the conversion
+        converter = ConverterFactory.get_converter(input_format, output_format, input_path, output_filename)
+        converter.convert()
+
+        st.success(f"Conversion successful! Download the file below.")
+        st.download_button("Download Converted File", output_filename, file_name=output_filename)
+
+    except Exception as e:
+        st.error(f"Error during conversion: {e}")
+
+
+# batch conversion from ZIP file
+def convert_zip(input_file, output_format):
+    # Validate file size
+    if input_file.size > MAX_FILE_SIZE:
+        st.error("File size exceeds 1GB limit.")
+        return
+
+    zip_filename = input_file.name
+    zip_path = os.path.join('input', zip_filename)
+    with open(zip_path, 'wb') as f:
+        f.write(input_file.getbuffer())
+
+    try:
+        # extract files from the uploaded ZIP file
+        extracted_files = extract_zip(zip_path)
+
+        # process and convert the extracted files
+        converted_files = []
+        for extracted_file in extracted_files:
+            input_filename = os.path.basename(extracted_file)
+            input_format = input_filename.rsplit('.', 1)[1].lower()
+
+            output_filename = f"output/{os.path.splitext(input_filename)[0]}_converted.{output_format}"
+
+            # get the correct converter from the converterFactory and perform the conversion
+            converter = ConverterFactory.get_converter(input_format, output_format, extracted_file, output_filename)
+            converted_files.append(output_filename)
+
+        # create a zip file of converted files
+        converted_zip = create_zip(converted_files)
+        st.success("Batch conversion completed successfully! Download the ZIP below.")
+        st.download_button("Download Converted ZIP", converted_zip, file_name=converted_zip)
+
+    except Exception as e:
+        st.error(f"Error during batch conversion: {e}")
+
+
+# Streamlit user interface
 def main():
-    st.title("File Converter")
+    st.title("FileFluent")
+    st.write("Upload your files for conversion")
 
-    uploaded_file = st.file_uploader("Choose a file", type=["txt", "csv", "json", "pdf", "docx", "jpg", "jpeg", "png", "bmp", "gif", "xml"])
+    # selection -> single file conversion or batch file conversion
+    task_type = st.radio("Choose a conversion task", ("Single File Conversion", "Batch Conversion (ZIP)"))
 
-    output_format = st.selectbox("Select Output Format", ["csv", "json", "txt", "pdf", "docx", "png", "bmp", "gif"])
+    if task_type == "Single File Conversion":
+        uploaded_file = upload_file()
+        if uploaded_file is not None:
+            # to classify the uploaded file on the basis of input file format
+            file_type = classify_file(uploaded_file)
 
-    if uploaded_file is not None and output_format:
-        if uploaded_file.type in ["text/plain", "text/csv", "application/json"]:
-            try:
-                content = uploaded_file.getvalue()
-                decoded_content = content.decode("utf-8")
-            except UnicodeDecodeError:
-                st.error("The file is not encoded in UTF-8. Please upload a UTF-8 encoded file.")
-                return
+            # based on the uploaded file type, show only the appropriate output formats available for conversion
+            if file_type == 'image':
+                output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
+            elif file_type == 'text':
+                output_formats = ['json', 'csv', 'xml', 'docx']
+            elif file_type == 'document':
+                output_formats = ['pdf', 'txt', 'docx']
+            else:
+                output_formats = SUPPORTED_OUTPUT_FORMATS
 
-            st.write("Uploaded File Preview:")
-            st.write(decoded_content[:500])
+            # to show output format dropdown for user to select from
+            output_format = st.selectbox("Choose the output format", [fmt for fmt in output_formats if fmt != uploaded_file.name.rsplit('.', 1)[1].lower()])
 
-        elif uploaded_file.type in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
-            st.write("Uploaded file is binary (PDF/Word). No preview available.")
+            # button to trigger conversion
+            if st.button("Convert"):
+                convert_single_file(uploaded_file, output_format)
 
-        if st.button("Convert"):
-            with tempfile.NamedTemporaryFile(delete=False) as temp_input:
-                temp_input.write(uploaded_file.getvalue())
-                temp_input.close()
+    elif task_type == "Batch Conversion (ZIP)":
+        uploaded_zip = st.file_uploader("Choose a ZIP file", type="zip", label_visibility="collapsed")
+        if uploaded_zip is not None:
+            # to classify the uploaded ZIP file
+            file_type = classify_file(uploaded_zip)
 
-                output_filename = f"output/{os.path.splitext(uploaded_file.name)[0]}_converted.{output_format}"
-                create_output_directory(output_filename)
+            # based on the uploaded file type, show only the appropriate output formats available for conversion
+            if file_type == 'image':
+                output_formats = ['png', 'jpg', 'jpeg', 'bmp', 'gif']
+            elif file_type == 'text':
+                output_formats = ['json', 'csv', 'xml', 'docx']
+            elif file_type == 'document':
+                output_formats = ['pdf', 'txt', 'docx']
+            else:
+                output_formats = SUPPORTED_OUTPUT_FORMATS  # Allow all formats for other types
 
-                input_format = uploaded_file.name.split('.')[-1].lower()
-                try:
-                    converter = ConverterFactory.get_converter(input_format, output_format)
-                    converter.convert(temp_input.name, output_filename)
+            # to show output format dropdown for user to select from
+            output_format = st.selectbox("Choose the output format", [fmt for fmt in output_formats if fmt != uploaded_zip.name.rsplit('.', 1)[1].lower()])
 
-                    with open(output_filename, "rb") as f:
-                        st.download_button("Download Converted File", f, file_name=output_filename)
-
-                except Exception as e:
-                    st.error(f"Error: {e}")
+            # button to trigger conversion
+            if st.button("Convert"):
+                convert_zip(uploaded_zip, output_format)
 
 
 if __name__ == "__main__":
