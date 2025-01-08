@@ -5,8 +5,15 @@ class ConverterFactory:
     @staticmethod
     def get_converter(input_format, output_format, input_path, output_path):
         """
-        This method will call the correct converter on the basis of the input and output file format
+        Factory method to return the appropriate converter instance based on input and output file formats.
+
+        Parameters:
+            input_format (str): The format of the input file.
+            output_format (str): The desired output format.
+            input_path (str): Path to the input file.
+            output_path (str): Path to save the converted file.
+
+        Returns:
+            Converter: An instance of the `Converter` class configured with the given parameters.
         """
-        # to return a converter based on the type of input format
-        converter = Converter(input_path, output_path, output_format)
-        return converter
+        return Converter(input_path, output_path, output_format)

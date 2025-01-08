@@ -1,25 +1,44 @@
 from PIL import Image
-import fitz
+import fitz  # PyMuPDF
 import pandas as pd
 from docx import Document
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 import json
 import csv
+import os
 import xml.etree.ElementTree as ET
-import subprocess
-from config import SUPPORTED_INPUT_FORMATS
 
 
 class Converter:
     def __init__(self, input_path, output_path, output_format):
+        """
+        To initialize the converter with input file, output file, and desired output format.
+
+        Parameters:
+            input_path (str): Path to the input file.
+            output_path (str): Path to save the converted file.
+            output_format (str): Desired output format.
+        """
         self.input_path = input_path
         self.output_path = output_path
         self.output_format = output_format
 
-    # conversion for any input image format to any other supported format
     def convert_image(self):
+        """
+        To convert images between supported formats.
+
+        Supported Input Formats:
+            - jpg, jpeg, png, bmp, gif
+
+        Supported Output Formats:
+            - jpg, jpeg, png, bmp, gif
+
+        Returns:
+            None: Saves the converted image to the specified output path.
+        """
         with Image.open(self.input_path) as img:
             if self.output_format.lower() == 'png':
-                img = img.convert("RGBA")
                 img.save(self.output_path, format="PNG")
             elif self.output_format.lower() in ['jpg', 'jpeg']:
                 img = img.convert("RGB")
@@ -31,44 +50,107 @@ class Converter:
             else:
                 raise ValueError(f"Unsupported image output format: {self.output_format}")
 
-    # conversion for pdf to text/png
     def convert_pdf(self):
-        doc = fitz.open(self.input_path)
+        """
+        To convert PDFs to text, images, or DOCX.
+
+        Returns:
+                None: Saves the converted file to the specified output path.
+        """
         if self.output_format.lower() == 'txt':
-            with open(self.output_path, 'w') as txt_file:
-                for page in doc:
-                    txt_file.write(page.get_text())
+            self.convert_pdf_to_txt()
         elif self.output_format.lower() == 'png':
-            page = doc.load_page(0)
-            pix = page.get_pixmap()
-            pix.save(self.output_path)
+            self.convert_pdf_to_png()
+        elif self.output_format.lower() == 'docx':
+            self.convert_pdf_to_docx()
         else:
             raise ValueError(f"Unsupported PDF output format: {self.output_format}")
 
-    # conversion for docx to text/pdf
+    def convert_pdf_to_txt(self):
+        """
+        To extract text content from a PDF.
+
+        Returns:
+            None: Saves the extracted text to the specified output path.
+        """
+        doc = fitz.open(self.input_path)
+        with open(self.output_path, 'w') as txt_file:
+            for page in doc:
+                txt_file.write(page.get_text())
+
+    def convert_pdf_to_png(self):
+        """
+        To convert the first page of a PDF to an image.
+
+        Returns:
+            None: Saves the image to the specified output path.
+        """
+        doc = fitz.open(self.input_path)
+        page = doc.load_page(0)
+        pix = page.get_pixmap()
+        pix.save(self.output_path)
+
+    def convert_pdf_to_docx(self):
+        """
+        To convert the content of a PDF to a DOCX file.
+
+        Returns:
+            None: Saves the DOCX file to the specified output path.
+        """
+        doc = fitz.open(self.input_path)
+        word_doc = Document()
+
+        for page_num, page in enumerate(doc):
+            text = page.get_text()
+            word_doc.add_paragraph(f"Page {page_num + 1}")
+            word_doc.add_paragraph(text)
+            word_doc.add_paragraph("\n" + "-" * 50 + "\n")
+
+        word_doc.save(self.output_path)
+
     def convert_docx(self):
+        """
+        To convert DOCX files to text or PDF.
+
+        Returns:
+            None: Saves the converted file to the specified output path.
+        """
         if self.output_format.lower() == 'txt':
-            doc = Document(self.input_path)
-            with open(self.output_path, 'w') as txt_file:
-                for para in doc.paragraphs:
-                    txt_file.write(para.text + '\n')
+            self.convert_docx_to_txt()
         elif self.output_format.lower() == 'pdf':
-            self.convert_docx_to_pdf()  # Convert DOCX to PDF using LibreOffice
+            self.convert_docx_to_pdf()
         else:
             raise ValueError(f"Unsupported DOCX output format: {self.output_format}")
 
-    # conversion for docx to pdf
-    def convert_docx_to_pdf(self):
-        try:
-            subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', self.input_path],
-                           check=True)
-            output_pdf_path = self.input_path.replace('.docx', '.pdf')
-            subprocess.run(['mv', output_pdf_path, self.output_path], check=True)
-        except subprocess.CalledProcessError as e:
-            raise ValueError(f"Failed to convert DOCX to PDF: {e}")
+    def convert_docx_to_txt(self):
+        doc = Document(self.input_path)
+        with open(self.output_path, 'w') as txt_file:
+            for para in doc.paragraphs:
+                txt_file.write(para.text + '\n')
 
-    # conversion csv to json/txt
+    def convert_docx_to_pdf(self):
+        doc = Document(self.input_path)
+        c = canvas.Canvas(self.output_path, pagesize=letter)
+        width, height = letter
+        y_position = height - 50  # Start position for text
+
+        for para in doc.paragraphs:
+            text = para.text
+            if y_position < 50:  # Add a new page if text exceeds page height
+                c.showPage()
+                y_position = height - 50
+            c.drawString(50, y_position, text)
+            y_position -= 15  # Move down for the next line
+
+        c.save()
+
     def convert_csv(self):
+        """
+        To convert CSV files to JSON or text.
+
+        Returns:
+            None: Saves the converted file to the specified output path.
+        """
         if self.output_format.lower() == 'json':
             df = pd.read_csv(self.input_path)
             df.to_json(self.output_path, orient='records', lines=True)
@@ -78,8 +160,13 @@ class Converter:
         else:
             raise ValueError(f"Unsupported CSV output format: {self.output_format}")
 
-    # conversion text to json/csv/xml/docx
     def convert_text(self):
+        """
+        To convert plain text files to JSON, CSV, XML, or DOCX.
+
+        Returns:
+            None: Saves the converted file to the specified output path.
+        """
         if self.output_format.lower() == 'json':
             self.convert_text_to_json()
         elif self.output_format.lower() == 'csv':
@@ -91,19 +178,15 @@ class Converter:
         else:
             raise ValueError(f"Unsupported text output format: {self.output_format}")
 
-    # conversion text to json
     def convert_text_to_json(self):
         with open(self.input_path, 'r') as f:
             lines = f.readlines()
 
-        data = []
-        for line in lines:
-            data.append({"text": line.strip()})
+        data = [{"line": line.strip()} for line in lines]
 
         with open(self.output_path, 'w') as json_file:
             json.dump(data, json_file, indent=4)
 
-    # conversion text to csv
     def convert_text_to_csv(self):
         with open(self.input_path, 'r') as f:
             lines = f.readlines()
@@ -114,7 +197,6 @@ class Converter:
             writer = csv.writer(csv_file)
             writer.writerows(rows)
 
-    # conversion text to xml
     def convert_text_to_xml(self):
         root = ET.Element("root")
 
@@ -128,7 +210,6 @@ class Converter:
         tree = ET.ElementTree(root)
         tree.write(self.output_path)
 
-    # conversion text to docx
     def convert_text_to_docx(self):
         doc = Document()
 
@@ -140,8 +221,20 @@ class Converter:
 
         doc.save(self.output_path)
 
-    # general method to call respective converter to the input file format
     def convert(self):
+        """
+        General method to call the appropriate converter based on the input file type.
+
+        Supported Input Formats:
+            - Image: jpg, jpeg, png, bmp, gif
+            - PDF: pdf
+            - Document: docx
+            - Text: txt
+            - CSV: csv
+
+        Returns:
+            None: Calls the relevant conversion method and saves the output.
+        """
         input_format = self.input_path.split('.')[-1].lower()
 
         if input_format in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
