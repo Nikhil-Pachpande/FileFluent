@@ -1,6 +1,6 @@
-streamlit
-pandas
-Pillow
+pandas~=2.2.3
+Pillow~=11.0.0
 PyMuPDF
 python-docx
 reportlab
+streamlit
