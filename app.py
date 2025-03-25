@@ -1,20 +1,12 @@
 import os
 import streamlit as st
+from pathlib import Path
 from converterFactory import ConverterFactory
 from utils import validate_file_format, create_output_directory, extract_zip, create_zip
 from config import SUPPORTED_INPUT_FORMATS, SUPPORTED_OUTPUT_FORMATS, MAX_FILE_SIZE
 
 
-def classify_file(input_file):
-    """
-    To classify the uploaded file based on its extension.
-
-    Parameters:
-        input_file (UploadedFile): The file uploaded via Streamlit.
-
-    Returns:
-        str: A string indicating the file type (e.g., 'image', 'text', 'document', or 'other').
-    """
+def classify_file(input_file) -> str:
     extension = input_file.name.split('.')[-1].lower()
     if extension in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
         return 'image'
@@ -27,26 +19,10 @@ def classify_file(input_file):
 
 
 def upload_file():
-    """
-    To handle single file uploads using Streamlit's file_uploader.
-
-    Returns:
-        UploadedFile: The uploaded file object.
-    """
     return st.file_uploader("Choose a file", type=SUPPORTED_INPUT_FORMATS, label_visibility="collapsed")
 
 
-def convert_single_file(input_file, output_format):
-    """
-    To convert a single uploaded file to the specified output format.
-
-    Parameters:
-        input_file (UploadedFile): The file uploaded via Streamlit.
-        output_format (str): The desired output format.
-
-    Returns:
-        None: Displays success or error messages in the Streamlit app and provides a download button for the converted file.
-    """
+def convert_single_file(input_file, output_format: str) -> None:
     if input_file.size > MAX_FILE_SIZE:
         st.error("File size exceeds 1GB limit.")
         return
@@ -56,71 +32,56 @@ def convert_single_file(input_file, output_format):
         st.error(error_message)
         return
 
-    input_path = os.path.join('input', input_file.name)
+    input_path = Path('input') / input_file.name
     with open(input_path, 'wb') as f:
         f.write(input_file.getbuffer())
 
-    output_filename = f"{os.path.splitext(input_file.name)[0]}_converted.{output_format}"
-    output_path = os.path.join('output', output_filename)
-    create_output_directory(output_path)
+    output_filename = f"{input_path.stem}_converted.{output_format}"
+    output_path = Path('output') / output_filename
+    create_output_directory(str(output_path))
 
     try:
-        input_format = input_file.name.rsplit('.', 1)[1].lower()
-        converter = ConverterFactory.get_converter(input_format, output_format, input_path, output_path)
+        input_format = input_file.name.split('.')[-1].lower()
+        converter = ConverterFactory.get_converter(input_format, output_format, str(input_path), str(output_path))
         converter.convert()
         st.success("Conversion successful! Download the file below.")
-        st.download_button("Download Converted File", open(output_path, 'rb'), file_name=output_filename)
+        with open(output_path, 'rb') as converted_file:
+            st.download_button("Download Converted File", data=converted_file, file_name=output_filename)
     except Exception as e:
         st.error(f"Error during conversion: {e}")
 
 
-def convert_zip(input_file, output_format):
-    """
-    To handle batch conversion of files contained in a ZIP archive.
-
-    Parameters:
-        input_file (UploadedFile): The ZIP file uploaded via Streamlit.
-        output_format (str): The desired output format for all files in the ZIP.
-
-    Returns:
-        None: Displays success or error messages in the Streamlit app and provides a download button for the ZIP of converted files.
-    """
+def convert_zip(input_file, output_format: str) -> None:
     if input_file.size > MAX_FILE_SIZE:
         st.error("File size exceeds 1GB limit.")
         return
 
-    zip_path = os.path.join('input', input_file.name)
+    zip_path = Path('input') / input_file.name
     with open(zip_path, 'wb') as f:
         f.write(input_file.getbuffer())
 
     try:
-        extracted_files = extract_zip(zip_path)
+        extracted_files = extract_zip(str(zip_path))
         converted_files = []
 
-        for extracted_file in extracted_files:
-            input_filename = os.path.basename(extracted_file)
-            input_format = input_filename.rsplit('.', 1)[1].lower()
-            output_filename = f"{os.path.splitext(input_filename)[0]}_converted.{output_format}"
-            output_path = os.path.join('output', output_filename)
-
-            converter = ConverterFactory.get_converter(input_format, output_format, extracted_file, output_path)
+        for file in extracted_files:
+            file_path = Path(file)
+            input_format = file_path.suffix.lower().lstrip('.')
+            output_filename = f"{file_path.stem}_converted.{output_format}"
+            output_file = Path('output') / output_filename
+            converter = ConverterFactory.get_converter(input_format, output_format, str(file_path), str(output_file))
             converter.convert()
-            converted_files.append(output_path)
+            converted_files.append(str(output_file))
 
         converted_zip = create_zip(converted_files)
         st.success("Batch conversion completed successfully! Download the ZIP below.")
-        st.download_button("Download Converted ZIP", open(converted_zip, 'rb'), file_name='converted_files.zip')
+        with open(converted_zip, 'rb') as zip_file:
+            st.download_button("Download Converted ZIP", data=zip_file, file_name='converted_files.zip')
     except Exception as e:
         st.error(f"Error during batch conversion: {e}")
 
 
 def main():
-    """
-    Main function that sets up the Streamlit user interface.
-
-    Returns:
-        None: Starts the Streamlit app.
-    """
     st.title("FileFluent")
     st.write("Upload your files for conversion")
 
@@ -139,7 +100,11 @@ def main():
             else:
                 output_formats = SUPPORTED_OUTPUT_FORMATS
 
-            output_format = st.selectbox("Choose the output format", [fmt for fmt in output_formats if fmt != uploaded_file.name.rsplit('.', 1)[1].lower()])
+            # Exclude the input file's format from the selection
+            input_ext = uploaded_file.name.split('.')[-1].lower()
+            output_formats = [fmt for fmt in output_formats if fmt != input_ext]
+
+            output_format = st.selectbox("Choose the output format", output_formats)
 
             if st.button("Convert"):
                 convert_single_file(uploaded_file, output_format)
@@ -147,9 +112,7 @@ def main():
     elif task_type == "Batch Conversion (ZIP)":
         uploaded_zip = st.file_uploader("Choose a ZIP file", type="zip", label_visibility="collapsed")
         if uploaded_zip:
-            output_formats = SUPPORTED_OUTPUT_FORMATS
-            output_format = st.selectbox("Choose the output format", output_formats)
-
+            output_format = st.selectbox("Choose the output format", SUPPORTED_OUTPUT_FORMATS)
             if st.button("Convert"):
                 convert_zip(uploaded_zip, output_format)
 
