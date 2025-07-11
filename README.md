@@ -66,4 +66,4 @@ The application is live at https://filefluent.streamlit.app.
 - Add support for additional file formats (e.g., audio, video).
 - Implement OCR for converting scanned PDFs to editable text.
 - Allow user-defined output directories.
-- Add support for cloud storage integrations (e.g., AWS S3, Google Drive).
+- Add support for cloud storage integrations (e.g., AWS S3, Google Drive)
